@@ -1,0 +1,17 @@
+{
+  "name": "substack-dashboard",
+  "version": "1.0.0",
+  "description": "Self-hosted analytics dashboard for Substack publications. Fully customizable via config.json.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["substack", "analytics", "dashboard"],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}

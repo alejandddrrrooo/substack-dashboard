@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Substack Dashboard — Posts</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    :root {
+      --accent: #f97316;
+      --bg: #0a0a0a;
+      --card-bg: #111111;
+      --border: #1a1a1a;
+      --text-primary: #ffffff;
+      --text-secondary: #e0e0e0;
+      --text-muted: #666666;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text-secondary);
+      min-height: 100vh;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    header {
+      padding: 32px 40px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 { font-size: 24px; font-weight: 600; color: var(--text-primary); }
+    header h1 span { color: var(--accent); }
+    nav { display: flex; gap: 16px; align-items: center; }
+    nav a {
+      padding: 6px 16px; border-radius: 6px; font-size: 14px;
+      color: #999; transition: all 0.2s;
+    }
+    nav a:hover, nav a.active { background: var(--border); color: var(--text-primary); text-decoration: none; }
+    .container { padding: 32px 40px; max-width: 1600px; }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .kpi-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+    }
+    .kpi-card .label {
+      font-size: 12px; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 8px;
+    }
+    .kpi-card .value { font-size: 28px; font-weight: 700; color: var(--text-primary); }
+    .kpi-card .sub { font-size: 13px; color: #555; margin-top: 4px; }
+
+    .controls {
+      display: flex; gap: 12px; margin-bottom: 24px;
+      align-items: center; flex-wrap: wrap;
+    }
+    .controls input, .controls select {
+      background: var(--card-bg); border: 1px solid #222;
+      color: var(--text-secondary); padding: 8px 12px;
+      border-radius: 8px; font-size: 14px;
+    }
+    .controls input { width: 280px; }
+    .controls select { min-width: 140px; }
+
+    .charts-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 16px; margin-bottom: 32px;
+    }
+    .chart-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .chart-card h3 { font-size: 14px; font-weight: 500; color: #999; margin-bottom: 16px; }
+
+    .table-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 32px;
+      overflow-x: auto;
+    }
+    .table-card h3 { font-size: 14px; font-weight: 500; color: #999; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.05em; color: #555; padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer; user-select: none; white-space: nowrap;
+    }
+    th:hover { color: var(--accent); }
+    th.sorted { color: var(--accent); }
+    td {
+      padding: 10px 12px; font-size: 13px;
+      border-bottom: 1px solid #0e0e0e; white-space: nowrap;
+    }
+    td.title-cell { white-space: normal; max-width: 300px; }
+    tr:hover td { background: #151515; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .audience-badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 500; }
+    .audience-badge.everyone { background: #1a3a1a; color: #4ade80; }
+    .audience-badge.paid { background: #2a1a3a; color: #c084fc; }
+    .section-tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #1a1a2a; color: #7aa2f7; }
+    .revenue-cell { color: #22c55e; font-weight: 600; }
+
+    @media (max-width: 900px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .charts-grid { grid-template-columns: 1fr; }
+      .container { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><span id="pubName">Loading...</span> — Posts</h1>
+    <nav>
+      <a href="/">Overview</a>
+      <a href="/posts.html" class="active">Posts</a>
+    </nav>
+  </header>
+  <div class="container" id="app"></div>
+
+  <script>
+    let CFG = {};
+    let allPosts = [];
+    let sortCol = 'estimatedRevenue';
+    let sortDir = 'desc';
+    let filterText = '';
+    let filterSection = '';
+    let filterAudience = '';
+
+    function getColor(key) {
+      return (CFG.charts && CFG.charts.colors && CFG.charts.colors[key]) || '#f97316';
+    }
+
+    function applyTheme() {
+      const t = CFG.theme || {};
+      const root = document.documentElement.style;
+      if (t.accentColor) root.setProperty('--accent', t.accentColor);
+      if (t.backgroundColor) root.setProperty('--bg', t.backgroundColor);
+      if (t.cardBackground) root.setProperty('--card-bg', t.cardBackground);
+      if (t.borderColor) root.setProperty('--border', t.borderColor);
+      if (t.textPrimary) root.setProperty('--text-primary', t.textPrimary);
+      if (t.textSecondary) root.setProperty('--text-secondary', t.textSecondary);
+      if (t.textMuted) root.setProperty('--text-muted', t.textMuted);
+
+      const pub = CFG.publication || {};
+      document.getElementById('pubName').textContent = pub.name || 'My Publication';
+      document.title = `${pub.name || 'Substack'} — Posts`;
+    }
+
+    async function loadData() {
+      // Load config
+      try {
+        const res = await fetch('/api/config');
+        CFG = await res.json();
+      } catch {
+        try { const res = await fetch('/config.json'); CFG = await res.json(); } catch { CFG = {}; }
+      }
+      applyTheme();
+
+      // Load data
+      let data;
+      try {
+        const res = await fetch('/api/snapshots');
+        data = await res.json();
+      } catch {
+        const res = await fetch('/data.json');
+        data = await res.json();
+      }
+      if (!data.snapshots || data.snapshots.length === 0) return;
+      const latest = data.snapshots[data.snapshots.length - 1];
+      if (!latest.allPosts) { document.getElementById('app').innerHTML = '<p style="color:#666">No post data yet.</p>'; return; }
+      allPosts = latest.allPosts;
+      render();
+    }
+
+    function getFiltered() {
+      return allPosts.filter(p => {
+        if (filterText && !p.title.toLowerCase().includes(filterText.toLowerCase())) return false;
+        if (filterSection && p.sectionName !== filterSection) return false;
+        if (filterAudience && p.audience !== filterAudience) return false;
+        return true;
+      });
+    }
+
+    function getSorted(posts) {
+      return [...posts].sort((a, b) => {
+        let va = a[sortCol], vb = b[sortCol];
+        if (typeof va === 'string') { va = va.toLowerCase(); vb = (vb || '').toLowerCase(); }
+        if (va < vb) return sortDir === 'asc' ? -1 : 1;
+        if (va > vb) return sortDir === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    // Determine which columns to show
+    function getColumns() {
+      const pm = CFG.metrics && CFG.metrics.posts;
+      const cols = (pm && pm.columns) || [
+        'title', 'postDate', 'sectionName', 'audience',
+        'views', 'delivered', 'opened', 'openRate',
+        'signups', 'subscribes', 'shares',
+        'estimatedRevenue', 'reactionCount'
+      ];
+      return cols;
+    }
+
+    const COL_LABELS = {
+      title: 'Title', postDate: 'Date', sectionName: 'Section', audience: 'Audience',
+      views: 'Views', delivered: 'Delivered', opened: 'Opened', openRate: 'Open Rate',
+      signups: 'Signups', subscribes: 'Paid Subs', shares: 'Shares',
+      estimatedRevenue: 'Revenue', reactionCount: 'Likes', clicks: 'Clicks',
+      clickThroughRate: 'CTR', commentCount: 'Comments'
+    };
+
+    function render() {
+      const app = document.getElementById('app');
+      const filtered = getFiltered();
+      const sorted = getSorted(filtered);
+      const columns = getColumns();
+      const pm = CFG.metrics && CFG.metrics.posts || {};
+      const pubUrl = (CFG.publication && CFG.publication.url) || '';
+
+      const totalRevenue = filtered.reduce((s, p) => s + (p.estimatedRevenue || 0), 0);
+      const totalViews = filtered.reduce((s, p) => s + (p.views || 0), 0);
+      const totalSignups = filtered.reduce((s, p) => s + (p.signups || 0), 0);
+      const totalSubscribes = filtered.reduce((s, p) => s + (p.subscribes || 0), 0);
+      const avgOpenRate = filtered.length > 0 ? (filtered.reduce((s, p) => s + (p.openRate || 0), 0) / filtered.length * 100) : 0;
+
+      const sections = [...new Set(allPosts.map(p => p.sectionName).filter(Boolean))].sort();
+
+      // Build charts HTML
+      const chartCards = [];
+      if (pm.revenueByPost !== false) chartCards.push('<div class="chart-card"><h3>Revenue by Post (Top 20)</h3><canvas id="revenueByPost"></canvas></div>');
+      if (pm.revenueBySection !== false) chartCards.push('<div class="chart-card"><h3>Revenue by Section</h3><canvas id="revenueBySection"></canvas></div>');
+      if (pm.paidGrowth !== false) chartCards.push('<div class="chart-card" style="grid-column:1/-1"><h3>Paid Subscriber Growth (Day over Day)</h3><canvas id="paidGrowthChart"></canvas></div>');
+
+      app.innerHTML = `
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="label">Total Revenue</div>
+            <div class="value">$${Math.round(totalRevenue).toLocaleString()}</div>
+            <div class="sub">${filtered.length} posts</div>
+          </div>
+          <div class="kpi-card">
+            <div class="label">Total Views</div>
+            <div class="value">${totalViews.toLocaleString()}</div>
+            <div class="sub">${filtered.length > 0 ? Math.round(totalViews / filtered.length).toLocaleString() : 0} avg/post</div>
+          </div>
+          <div class="kpi-card">
+            <div class="label">Total Signups</div>
+            <div class="value">${totalSignups.toLocaleString()}</div>
+            <div class="sub">${totalSubscribes.toLocaleString()} paid conversions</div>
+          </div>
+          <div class="kpi-card">
+            <div class="label">Avg Open Rate</div>
+            <div class="value">${avgOpenRate.toFixed(1)}%</div>
+          </div>
+          <div class="kpi-card">
+            <div class="label">Avg Revenue/Post</div>
+            <div class="value">$${filtered.length > 0 ? Math.round(totalRevenue / filtered.length).toLocaleString() : 0}</div>
+          </div>
+        </div>
+
+        ${chartCards.length > 0 ? `<div class="charts-grid">${chartCards.join('')}</div>` : ''}
+
+        <div class="controls">
+          <input type="text" id="search" placeholder="Search posts..." value="${filterText}">
+          <select id="sectionFilter">
+            <option value="">All Sections</option>
+            ${sections.map(s => `<option value="${s}" ${filterSection === s ? 'selected' : ''}>${s}</option>`).join('')}
+          </select>
+          <select id="audienceFilter">
+            <option value="">All Audiences</option>
+            <option value="everyone" ${filterAudience === 'everyone' ? 'selected' : ''}>Everyone</option>
+            <option value="only_paid" ${filterAudience === 'only_paid' ? 'selected' : ''}>Paid Only</option>
+          </select>
+        </div>
+
+        <div class="table-card">
+          <h3>All Posts (${filtered.length})</h3>
+          <table>
+            <thead><tr>${columns.map(c => col(c, COL_LABELS[c] || c)).join('')}</tr></thead>
+            <tbody>${sorted.map(p => postRow(p, columns, pubUrl)).join('')}</tbody>
+          </table>
+        </div>
+      `;
+
+      // Bind events
+      document.getElementById('search').addEventListener('input', e => { filterText = e.target.value; render(); });
+      document.getElementById('sectionFilter').addEventListener('change', e => { filterSection = e.target.value; render(); });
+      document.getElementById('audienceFilter').addEventListener('change', e => { filterAudience = e.target.value; render(); });
+      document.querySelectorAll('th[data-col]').forEach(th => {
+        th.addEventListener('click', () => {
+          const c = th.dataset.col;
+          if (sortCol === c) sortDir = sortDir === 'desc' ? 'asc' : 'desc';
+          else { sortCol = c; sortDir = 'desc'; }
+          render();
+        });
+      });
+
+      renderCharts(filtered);
+    }
+
+    function col(key, label) {
+      const arrow = sortCol === key ? (sortDir === 'desc' ? ' &#9660;' : ' &#9650;') : '';
+      const cls = sortCol === key ? 'sorted' : '';
+      return `<th data-col="${key}" class="${cls}">${label}${arrow}</th>`;
+    }
+
+    function cellValue(p, col, pubUrl) {
+      switch (col) {
+        case 'title':
+          return `<td class="title-cell">${pubUrl ? `<a href="${pubUrl}/p/${p.slug}" target="_blank">${p.title}</a>` : p.title}</td>`;
+        case 'postDate':
+          return `<td>${new Date(p.postDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>`;
+        case 'sectionName':
+          return `<td>${p.sectionName ? `<span class="section-tag">${p.sectionName}</span>` : '—'}</td>`;
+        case 'audience': {
+          const aud = p.audience === 'everyone' ? 'Everyone' : 'Paid';
+          const cls = p.audience === 'everyone' ? 'everyone' : 'paid';
+          return `<td><span class="audience-badge ${cls}">${aud}</span></td>`;
+        }
+        case 'openRate':
+          return `<td class="num">${((p.openRate || 0) * 100).toFixed(1)}%</td>`;
+        case 'clickThroughRate':
+          return `<td class="num">${((p.clickThroughRate || 0) * 100).toFixed(1)}%</td>`;
+        case 'estimatedRevenue':
+          return `<td class="num revenue-cell">$${Math.round(p.estimatedRevenue || 0).toLocaleString()}</td>`;
+        default:
+          return `<td class="num">${(p[col] || 0).toLocaleString()}</td>`;
+      }
+    }
+
+    function postRow(p, columns, pubUrl) {
+      return `<tr>${columns.map(c => cellValue(p, c, pubUrl)).join('')}</tr>`;
+    }
+
+    function renderCharts(posts) {
+      const pm = CFG.metrics && CFG.metrics.posts || {};
+      const sColors = [getColor('subscribers'), getColor('openRate'), getColor('paid'), getColor('revenue'), getColor('pink'), getColor('teal'), getColor('yellow'), getColor('red')];
+
+      if (pm.revenueByPost !== false && document.getElementById('revenueByPost')) {
+        const top20 = [...posts].sort((a, b) => b.estimatedRevenue - a.estimatedRevenue).slice(0, 20);
+        new Chart(document.getElementById('revenueByPost'), {
+          type: 'bar',
+          data: {
+            labels: top20.map(p => p.title.length > 40 ? p.title.substring(0, 40) + '...' : p.title),
+            datasets: [{ label: 'Revenue (USD)', data: top20.map(p => Math.round(p.estimatedRevenue)), backgroundColor: getColor('revenue') + '40', borderColor: getColor('revenue'), borderWidth: 1 }]
+          },
+          options: {
+            indexAxis: 'y', responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { color: '#444', callback: v => '$' + v.toLocaleString() }, grid: { color: '#1a1a1a' } },
+              y: { ticks: { color: '#999', font: { size: 11 } }, grid: { display: false } }
+            }
+          }
+        });
+      }
+
+      if (pm.revenueBySection !== false && document.getElementById('revenueBySection')) {
+        const sectionRevenue = {};
+        posts.forEach(p => { const s = p.sectionName || 'No section'; sectionRevenue[s] = (sectionRevenue[s] || 0) + p.estimatedRevenue; });
+        const entries = Object.entries(sectionRevenue).sort((a, b) => b[1] - a[1]);
+        new Chart(document.getElementById('revenueBySection'), {
+          type: 'doughnut',
+          data: {
+            labels: entries.map(e => e[0]),
+            datasets: [{ data: entries.map(e => Math.round(e[1])), backgroundColor: entries.map((_, i) => sColors[i % sColors.length]), borderWidth: 0 }]
+          },
+          options: { responsive: true, plugins: { legend: { position: 'right', labels: { color: '#999', padding: 10, font: { size: 12 } } } } }
+        });
+      }
+
+      if (pm.paidGrowth !== false && document.getElementById('paidGrowthChart')) {
+        const dailyPaid = {};
+        posts.forEach(p => { const day = p.postDate.split('T')[0]; dailyPaid[day] = (dailyPaid[day] || 0) + (p.subscribes || 0); });
+        const days = Object.keys(dailyPaid).sort();
+        let cumulative = 0;
+        const cumulativeData = days.map(d => { cumulative += dailyPaid[d]; return cumulative; });
+
+        new Chart(document.getElementById('paidGrowthChart'), {
+          type: 'bar',
+          data: {
+            labels: days.map(d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+            datasets: [
+              { label: 'New Paid Subs', data: days.map(d => dailyPaid[d]), backgroundColor: getColor('paid') + '40', borderColor: getColor('paid'), borderWidth: 1, yAxisID: 'y', order: 2 },
+              { label: 'Cumulative Paid', data: cumulativeData, type: 'line', borderColor: getColor('subscribers'), backgroundColor: getColor('subscribers') + '20', fill: true, tension: 0.3, pointRadius: 0, yAxisID: 'y1', order: 1 }
+            ]
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#666' } } },
+            scales: {
+              x: { ticks: { color: '#444', maxRotation: 45 }, grid: { color: '#1a1a1a' } },
+              y: { position: 'left', title: { display: true, text: 'Daily', color: '#666' }, ticks: { color: getColor('paid') }, grid: { color: '#1a1a1a' } },
+              y1: { position: 'right', title: { display: true, text: 'Cumulative', color: '#666' }, ticks: { color: getColor('subscribers') }, grid: { display: false } }
+            }
+          }
+        });
+      }
+    }
+
+    loadData();
+  </script>
+</body>
+</html>

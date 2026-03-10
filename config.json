@@ -1,0 +1,65 @@
+{
+  "publication": {
+    "name": "Hermanos Bilbao",
+    "url": "https://www.bilbaos.co",
+    "description": "Substack Analytics Dashboard"
+  },
+  "server": {
+    "port": 3456
+  },
+  "theme": {
+    "accentColor": "#f97316",
+    "backgroundColor": "#0a0a0a",
+    "cardBackground": "#111111",
+    "borderColor": "#1a1a1a",
+    "textPrimary": "#ffffff",
+    "textSecondary": "#e0e0e0",
+    "textMuted": "#666666"
+  },
+  "charts": {
+    "colors": {
+      "subscribers": "#f97316",
+      "paid": "#a855f7",
+      "revenue": "#22c55e",
+      "openRate": "#3b82f6",
+      "pink": "#ec4899",
+      "teal": "#14b8a6",
+      "yellow": "#eab308",
+      "red": "#ef4444"
+    },
+    "revenueSources": {
+      "Instagram": "#e1306c",
+      "Direct": "#3b82f6",
+      "Substack": "#f97316",
+      "Direct to App": "#14b8a6",
+      "TikTok": "#000000",
+      "LinkedIn": "#0a66c2",
+      "Gift": "#eab308"
+    }
+  },
+  "metrics": {
+    "overview": {
+      "totalSubscribers": true,
+      "paidSubscribers": true,
+      "annualizedRevenue": true,
+      "openRate": true
+    },
+    "charts": {
+      "subscribersOverTime": true,
+      "revenueOverTime": true,
+      "revenueSources": true,
+      "openRateTrend": true
+    },
+    "posts": {
+      "revenueByPost": true,
+      "revenueBySection": true,
+      "paidGrowth": true,
+      "columns": [
+        "title", "postDate", "sectionName", "audience",
+        "views", "delivered", "opened", "openRate",
+        "signups", "subscribes", "shares",
+        "estimatedRevenue", "reactionCount"
+      ]
+    }
+  }
+}

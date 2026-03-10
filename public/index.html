@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Substack Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    :root {
+      --accent: #f97316;
+      --bg: #0a0a0a;
+      --card-bg: #111111;
+      --border: #1a1a1a;
+      --text-primary: #ffffff;
+      --text-secondary: #e0e0e0;
+      --text-muted: #666666;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text-secondary);
+      min-height: 100vh;
+    }
+    header {
+      padding: 32px 40px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    header h1 { font-size: 24px; font-weight: 600; color: var(--text-primary); }
+    header h1 span { color: var(--accent); }
+    header .date { font-size: 14px; color: var(--text-muted); }
+    .container { padding: 32px 40px; max-width: 1400px; }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .kpi-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+    }
+    .kpi-card .label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .kpi-card .value { font-size: 28px; font-weight: 700; color: var(--text-primary); }
+    .kpi-card .delta { font-size: 13px; margin-top: 4px; }
+    .delta.up { color: #22c55e; }
+    .delta.down { color: #ef4444; }
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .chart-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .chart-card h3 { font-size: 14px; font-weight: 500; color: #999; margin-bottom: 16px; }
+    .chart-card canvas { width: 100% !important; }
+    .chart-card.full { grid-column: 1 / -1; }
+
+    .table-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 32px;
+    }
+    .table-card h3 { font-size: 14px; font-weight: 500; color: #999; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.05em; color: #555; padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    td { padding: 10px 12px; font-size: 14px; border-bottom: 1px solid var(--card-bg); }
+    tr:hover td { background: #151515; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .audience-badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 500; }
+    .audience-badge.everyone { background: #1a3a1a; color: #4ade80; }
+    .audience-badge.paid { background: #2a1a3a; color: #c084fc; }
+
+    .revenue-bar { display: flex; align-items: center; margin-bottom: 8px; }
+    .revenue-bar .source-name { width: 120px; font-size: 13px; color: #999; flex-shrink: 0; }
+    .revenue-bar .bar-wrap { flex: 1; height: 24px; background: var(--border); border-radius: 4px; overflow: hidden; margin: 0 12px; }
+    .revenue-bar .bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+    .revenue-bar .amount { font-size: 13px; font-variant-numeric: tabular-nums; color: #ccc; width: 100px; text-align: right; flex-shrink: 0; }
+
+    .empty-state { text-align: center; padding: 80px 20px; color: #444; }
+    .empty-state h2 { font-size: 20px; color: var(--text-muted); margin-bottom: 8px; }
+
+    @media (max-width: 900px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .charts-grid { grid-template-columns: 1fr; }
+      .container { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><span id="pubName">Loading...</span> — Substack Dashboard</h1>
+    <div style="display:flex;align-items:center;gap:16px">
+      <nav style="display:flex;gap:8px">
+        <a href="/" style="padding:6px 16px;border-radius:6px;background:var(--border);color:var(--text-primary);text-decoration:none;font-size:14px">Overview</a>
+        <a href="/posts.html" style="padding:6px 16px;border-radius:6px;color:#999;text-decoration:none;font-size:14px">Posts</a>
+      </nav>
+      <div class="date" id="lastUpdated">Loading...</div>
+    </div>
+  </header>
+  <div class="container" id="app">
+    <div class="empty-state" id="emptyState">
+      <h2>No data yet</h2>
+      <p>The daily task will populate this dashboard automatically.</p>
+    </div>
+  </div>
+
+  <script>
+    let CFG = {};
+
+    async function loadConfig() {
+      try {
+        const res = await fetch('/api/config');
+        CFG = await res.json();
+      } catch {
+        try {
+          const res = await fetch('/config.json');
+          CFG = await res.json();
+        } catch {
+          CFG = {};
+        }
+      }
+      applyTheme();
+    }
+
+    function applyTheme() {
+      const t = CFG.theme || {};
+      const root = document.documentElement.style;
+      if (t.accentColor) root.setProperty('--accent', t.accentColor);
+      if (t.backgroundColor) root.setProperty('--bg', t.backgroundColor);
+      if (t.cardBackground) root.setProperty('--card-bg', t.cardBackground);
+      if (t.borderColor) root.setProperty('--border', t.borderColor);
+      if (t.textPrimary) root.setProperty('--text-primary', t.textPrimary);
+      if (t.textSecondary) root.setProperty('--text-secondary', t.textSecondary);
+      if (t.textMuted) root.setProperty('--text-muted', t.textMuted);
+
+      const pub = CFG.publication || {};
+      document.getElementById('pubName').textContent = pub.name || 'My Publication';
+      document.title = `${pub.name || 'Substack'} — Dashboard`;
+    }
+
+    function getColor(key) {
+      return (CFG.charts && CFG.charts.colors && CFG.charts.colors[key]) || '#f97316';
+    }
+
+    function getSourceColor(source) {
+      const map = (CFG.charts && CFG.charts.revenueSources) || {};
+      return map[source] || '#666';
+    }
+
+    function isMetricEnabled(section, key) {
+      if (!CFG.metrics || !CFG.metrics[section]) return true;
+      return CFG.metrics[section][key] !== false;
+    }
+
+    async function loadData() {
+      await loadConfig();
+      let data;
+      try {
+        const res = await fetch('/api/snapshots');
+        data = await res.json();
+      } catch {
+        const res = await fetch('/data.json');
+        data = await res.json();
+      }
+      if (!data.snapshots || data.snapshots.length === 0) return;
+
+      document.getElementById('emptyState').style.display = 'none';
+      const latest = data.snapshots[data.snapshots.length - 1];
+      const prev = data.snapshots.length > 1 ? data.snapshots[data.snapshots.length - 2] : null;
+
+      document.getElementById('lastUpdated').textContent = `Last updated: ${latest.date}`;
+      renderDashboard(data.snapshots, latest, prev);
+    }
+
+    function delta(current, previous) {
+      if (!previous || previous === 0) return '';
+      const diff = current - previous;
+      const pct = ((diff / previous) * 100).toFixed(1);
+      const sign = diff > 0 ? '+' : '';
+      const cls = diff > 0 ? 'up' : 'down';
+      return `<span class="delta ${cls}">${sign}${diff.toLocaleString()} (${sign}${pct}%)</span>`;
+    }
+
+    function renderDashboard(snapshots, latest, prev) {
+      const app = document.getElementById('app');
+      const m = CFG.metrics && CFG.metrics.overview || {};
+      app.innerHTML = '';
+
+      // KPI Cards — only show enabled metrics
+      const kpis = [];
+      if (m.totalSubscribers !== false) {
+        kpis.push(`<div class="kpi-card">
+          <div class="label">Total Subscribers</div>
+          <div class="value">${(latest.totalSubscribers || 0).toLocaleString()}</div>
+          ${prev ? delta(latest.totalSubscribers, prev.totalSubscribers) : ''}
+        </div>`);
+      }
+      if (m.paidSubscribers !== false) {
+        kpis.push(`<div class="kpi-card">
+          <div class="label">Paid Subscribers</div>
+          <div class="value">${(latest.paidSubscribers || 0).toLocaleString()}</div>
+          ${prev ? delta(latest.paidSubscribers, prev.paidSubscribers) : ''}
+        </div>`);
+      }
+      if (m.annualizedRevenue !== false) {
+        kpis.push(`<div class="kpi-card">
+          <div class="label">Annualized Revenue</div>
+          <div class="value">$${(latest.annualizedRevenue || 0).toLocaleString()}</div>
+          ${prev ? delta(latest.annualizedRevenue, prev.annualizedRevenue) : ''}
+        </div>`);
+      }
+      if (m.openRate !== false) {
+        kpis.push(`<div class="kpi-card">
+          <div class="label">30d Open Rate</div>
+          <div class="value">${latest.openRate || '—'}%</div>
+          ${prev ? `<span class="delta ${(latest.openRate - prev.openRate) >= 0 ? 'up' : 'down'}">${(latest.openRate - prev.openRate) >= 0 ? '+' : ''}${(latest.openRate - prev.openRate).toFixed(2)}pp</span>` : ''}
+        </div>`);
+      }
+      if (kpis.length > 0) {
+        app.insertAdjacentHTML('beforeend', `<div class="kpi-grid" style="grid-template-columns:repeat(${kpis.length},1fr)">${kpis.join('')}</div>`);
+      }
+
+      // Charts — only show enabled ones
+      const mc = CFG.metrics && CFG.metrics.charts || {};
+      const chartCards = [];
+      if (mc.subscribersOverTime !== false) chartCards.push('<div class="chart-card"><h3>Subscribers Over Time</h3><canvas id="subsChart"></canvas></div>');
+      if (mc.revenueOverTime !== false) chartCards.push('<div class="chart-card"><h3>Revenue Over Time (ARR)</h3><canvas id="revenueChart"></canvas></div>');
+      if (mc.revenueSources !== false) chartCards.push('<div class="chart-card"><h3>Revenue Sources (Latest)</h3><canvas id="sourcesChart"></canvas></div>');
+      if (mc.openRateTrend !== false) chartCards.push('<div class="chart-card"><h3>Open Rate Trend</h3><canvas id="openRateChart"></canvas></div>');
+      if (chartCards.length > 0) {
+        app.insertAdjacentHTML('beforeend', `<div class="charts-grid">${chartCards.join('')}</div>`);
+      }
+
+      const labels = snapshots.map(s => s.date);
+      const chartDefaults = {
+        responsive: true,
+        plugins: { legend: { labels: { color: '#666' } } },
+        scales: {
+          x: { ticks: { color: '#444' }, grid: { color: '#1a1a1a' } },
+          y: { ticks: { color: '#444' }, grid: { color: '#1a1a1a' } }
+        }
+      };
+
+      if (mc.subscribersOverTime !== false && document.getElementById('subsChart')) {
+        new Chart(document.getElementById('subsChart'), {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              { label: 'Total', data: snapshots.map(s => s.totalSubscribers), borderColor: getColor('subscribers'), backgroundColor: getColor('subscribers') + '20', fill: true, tension: 0.3 },
+              { label: 'Paid', data: snapshots.map(s => s.paidSubscribers), borderColor: getColor('paid'), backgroundColor: getColor('paid') + '20', fill: true, tension: 0.3 }
+            ]
+          },
+          options: chartDefaults
+        });
+      }
+
+      if (mc.revenueOverTime !== false && document.getElementById('revenueChart')) {
+        new Chart(document.getElementById('revenueChart'), {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              label: 'ARR (USD)',
+              data: snapshots.map(s => s.annualizedRevenue),
+              borderColor: getColor('revenue'),
+              backgroundColor: getColor('revenue') + '20',
+              fill: true, tension: 0.3
+            }]
+          },
+          options: chartDefaults
+        });
+      }
+
+      if (mc.revenueSources !== false && latest.revenueSources && latest.revenueSources.length > 0 && document.getElementById('sourcesChart')) {
+        const srcLabels = latest.revenueSources.map(s => s.source);
+        const srcValues = latest.revenueSources.map(s => s.amount);
+        const srcColors = srcLabels.map(s => getSourceColor(s));
+        new Chart(document.getElementById('sourcesChart'), {
+          type: 'doughnut',
+          data: { labels: srcLabels, datasets: [{ data: srcValues, backgroundColor: srcColors, borderWidth: 0 }] },
+          options: { responsive: true, plugins: { legend: { position: 'right', labels: { color: '#999', padding: 12 } } } }
+        });
+      }
+
+      if (mc.openRateTrend !== false && document.getElementById('openRateChart')) {
+        new Chart(document.getElementById('openRateChart'), {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              label: 'Open Rate %',
+              data: snapshots.map(s => s.openRate),
+              borderColor: getColor('openRate'),
+              backgroundColor: getColor('openRate') + '20',
+              fill: true, tension: 0.3
+            }]
+          },
+          options: { ...chartDefaults, scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, min: 0, max: 100 } } }
+        });
+      }
+
+      // Recent posts table
+      if (latest.recentPosts && latest.recentPosts.length > 0) {
+        const pubUrl = (CFG.publication && CFG.publication.url) || '';
+        let rows = latest.recentPosts.map(p => `
+          <tr>
+            <td>${pubUrl ? `<a href="${pubUrl}/p/${p.slug}" target="_blank" style="color:var(--accent)">${p.title}</a>` : p.title}</td>
+            <td>${p.date}</td>
+            <td><span class="audience-badge ${p.audience === 'Everyone' ? 'everyone' : 'paid'}">${p.audience}</span></td>
+            <td class="num">${(p.delivered || 0).toLocaleString()}</td>
+            <td class="num">${(p.opened || 0).toLocaleString()}</td>
+            <td class="num">${p.openRate || '—'}%</td>
+          </tr>
+        `).join('');
+
+        app.insertAdjacentHTML('beforeend', `
+          <div class="table-card">
+            <h3>Recent Posts</h3>
+            <table>
+              <thead><tr><th>Title</th><th>Date</th><th>Audience</th><th>Delivered</th><th>Opened</th><th>Open Rate</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        `);
+      }
+
+      // Revenue sources bar chart
+      if (mc.revenueSources !== false && latest.revenueSources && latest.revenueSources.length > 0) {
+        let bars = latest.revenueSources.map(s => {
+          const maxAmount = latest.revenueSources[0].amount;
+          const pct = (s.amount / maxAmount * 100).toFixed(1);
+          const color = getSourceColor(s.source);
+          return `
+            <div class="revenue-bar">
+              <div class="source-name">${s.source}</div>
+              <div class="bar-wrap"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
+              <div class="amount">$${s.amount.toLocaleString()} (${s.share})</div>
+            </div>
+          `;
+        }).join('');
+
+        app.insertAdjacentHTML('beforeend', `<div class="table-card"><h3>Revenue by Source (30d)</h3>${bars}</div>`);
+      }
+    }
+
+    loadData();
+  </script>
+</body>
+</html>

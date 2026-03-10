@@ -1,0 +1,50 @@
+{
+  "snapshots": [
+    {
+      "date": "2026-01-01",
+      "totalSubscribers": 1000,
+      "paidSubscribers": 50,
+      "annualizedRevenue": 5000,
+      "openRate": 45.5,
+      "recentPosts": [
+        {
+          "title": "My First Post",
+          "slug": "my-first-post",
+          "date": "2026-01-01",
+          "audience": "Everyone",
+          "delivered": 800,
+          "opened": 400,
+          "openRate": "50.0"
+        }
+      ],
+      "revenueSources": [
+        { "source": "Direct", "amount": 3000, "share": "60%" },
+        { "source": "Substack", "amount": 2000, "share": "40%" }
+      ],
+      "allPosts": [
+        {
+          "id": 1,
+          "title": "My First Post",
+          "slug": "my-first-post",
+          "postDate": "2026-01-01T12:00:00.000Z",
+          "audience": "everyone",
+          "sectionName": "",
+          "views": 500,
+          "opens": 400,
+          "opened": 400,
+          "openRate": 0.50,
+          "delivered": 800,
+          "sent": 800,
+          "signups": 10,
+          "subscribes": 2,
+          "shares": 5,
+          "estimatedRevenue": 100,
+          "clicks": 50,
+          "clickThroughRate": 0.0625,
+          "reactionCount": 20,
+          "commentCount": 3
+        }
+      ]
+    }
+  ]
+}

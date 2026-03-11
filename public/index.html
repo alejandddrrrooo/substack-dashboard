@@ -264,21 +264,24 @@
         const thisMonthChurn = monthlyChurn[curMonth] || 0;
         const lastMonthChurn = monthlyChurn[prevMonth] || 0;
         const totalChurn = latest.churnTimeseries.reduce((s, r) => s + r.count, 0);
-        const monthlyPct = latest.paidSubscribers > 0 ? (lastMonthChurn / latest.paidSubscribers * 100).toFixed(1) : null;
+        const paid = latest.paidSubscribers || 0;
+        const thisMonthPct = paid > 0 ? (thisMonthChurn / paid * 100).toFixed(1) : null;
+        const lastMonthPct = paid > 0 ? (lastMonthChurn / paid * 100).toFixed(1) : null;
+        const cumulativePct = paid > 0 ? (totalChurn / paid * 100).toFixed(1) : null;
         const topReason = latest.churnByReason ? Object.entries(latest.churnByReason).sort((a,b) => b[1] - a[1])[0] : null;
 
         // Monthly churn KPI
         kpis.push(`<div class="kpi-card">
           <div class="label">Churn This Month</div>
-          <div class="value" style="color:#ef4444">${thisMonthChurn} <span style="font-size:16px;font-weight:400">paid</span></div>
-          <span style="font-size:13px;color:#666">Last month: ${lastMonthChurn} ${monthlyPct ? `(${monthlyPct}%)` : ''}</span>
+          <div class="value" style="color:#ef4444">${thisMonthChurn} <span style="font-size:16px;font-weight:400">${thisMonthPct ? `(${thisMonthPct}%)` : ''}</span></div>
+          <span style="font-size:13px;color:#666">Last month: ${lastMonthChurn} ${lastMonthPct ? `(${lastMonthPct}%)` : ''}</span>
         </div>`);
 
-        // Total churn KPI
+        // Total churn KPI with cumulative %
         kpis.push(`<div class="kpi-card">
-          <div class="label">Total Churn</div>
-          <div class="value" style="color:#ef4444">${totalChurn}</div>
-          ${topReason ? `<span style="font-size:13px;color:#666">Top: ${REASON_LABELS[topReason[0]] || topReason[0]} (${topReason[1]})</span>` : ''}
+          <div class="label">Total Churn (90d)</div>
+          <div class="value" style="color:#ef4444">${totalChurn} <span style="font-size:16px;font-weight:400">${cumulativePct ? `(${cumulativePct}%)` : ''}</span></div>
+          ${topReason ? `<span style="font-size:13px;color:#666">Top reason: ${REASON_LABELS[topReason[0]] || topReason[0]} (${topReason[1]})</span>` : ''}
         </div>`);
       }
       if (m.netGrowth !== false && prev) {

@@ -2,7 +2,8 @@
   "publication": {
     "name": "Hermanos Bilbao",
     "url": "https://www.bilbaos.co",
-    "description": "Substack Analytics Dashboard"
+    "description": "Substack Analytics Dashboard",
+    "compSubscribers": 128
   },
   "server": {
     "port": 3456

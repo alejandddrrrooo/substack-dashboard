@@ -264,10 +264,11 @@
         const thisMonthChurn = monthlyChurn[curMonth] || 0;
         const lastMonthChurn = monthlyChurn[prevMonth] || 0;
         const totalChurn = latest.churnTimeseries.reduce((s, r) => s + r.count, 0);
-        const paid = latest.paidSubscribers || 0;
-        const thisMonthPct = paid > 0 ? (thisMonthChurn / paid * 100).toFixed(1) : null;
-        const lastMonthPct = paid > 0 ? (lastMonthChurn / paid * 100).toFixed(1) : null;
-        const cumulativePct = paid > 0 ? (totalChurn / paid * 100).toFixed(1) : null;
+        const comps = (CFG.publication && CFG.publication.compSubscribers) || 0;
+        const realPaid = (latest.paidSubscribers || 0) - comps;
+        const thisMonthPct = realPaid > 0 ? (thisMonthChurn / realPaid * 100).toFixed(1) : null;
+        const lastMonthPct = realPaid > 0 ? (lastMonthChurn / realPaid * 100).toFixed(1) : null;
+        const cumulativePct = realPaid > 0 ? (totalChurn / realPaid * 100).toFixed(1) : null;
         const topReason = latest.churnByReason ? Object.entries(latest.churnByReason).sort((a,b) => b[1] - a[1])[0] : null;
 
         // Monthly churn KPI

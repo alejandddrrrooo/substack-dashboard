@@ -251,12 +251,33 @@
           ${prev ? `<span class="delta ${(latest.openRate - prev.openRate) >= 0 ? 'up' : 'down'}">${(latest.openRate - prev.openRate) >= 0 ? '+' : ''}${(latest.openRate - prev.openRate).toFixed(2)}pp</span>` : ''}
         </div>`);
       }
-      if (m.churn90d !== false && latest.totalChurn90d) {
+      if (m.churn90d !== false && latest.churnTimeseries && latest.churnTimeseries.length > 0) {
+        // Monthly churn from timeseries
+        const now = new Date();
+        const curMonth = now.toISOString().substring(0, 7);
+        const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().substring(0, 7);
+        const monthlyChurn = {};
+        latest.churnTimeseries.forEach(r => {
+          const m2 = r.period.substring(0, 7);
+          monthlyChurn[m2] = (monthlyChurn[m2] || 0) + r.count;
+        });
+        const thisMonthChurn = monthlyChurn[curMonth] || 0;
+        const lastMonthChurn = monthlyChurn[prevMonth] || 0;
+        const totalChurn = latest.churnTimeseries.reduce((s, r) => s + r.count, 0);
+        const monthlyPct = latest.paidSubscribers > 0 ? (lastMonthChurn / latest.paidSubscribers * 100).toFixed(1) : null;
         const topReason = latest.churnByReason ? Object.entries(latest.churnByReason).sort((a,b) => b[1] - a[1])[0] : null;
-        const churnPct = latest.paidSubscribers > 0 ? ((latest.totalChurn90d / 3) / latest.paidSubscribers * 100).toFixed(1) : null;
+
+        // Monthly churn KPI
         kpis.push(`<div class="kpi-card">
-          <div class="label">Paid Churn (90d)</div>
-          <div class="value" style="color:#ef4444">${latest.totalChurn90d} <span style="font-size:16px;font-weight:400">${churnPct ? `(${churnPct}%/mo)` : ''}</span></div>
+          <div class="label">Churn This Month</div>
+          <div class="value" style="color:#ef4444">${thisMonthChurn} <span style="font-size:16px;font-weight:400">paid</span></div>
+          <span style="font-size:13px;color:#666">Last month: ${lastMonthChurn} ${monthlyPct ? `(${monthlyPct}%)` : ''}</span>
+        </div>`);
+
+        // Total churn KPI
+        kpis.push(`<div class="kpi-card">
+          <div class="label">Total Churn</div>
+          <div class="value" style="color:#ef4444">${totalChurn}</div>
           ${topReason ? `<span style="font-size:13px;color:#666">Top: ${REASON_LABELS[topReason[0]] || topReason[0]} (${topReason[1]})</span>` : ''}
         </div>`);
       }
@@ -282,8 +303,9 @@
       if (mc.revenueOverTime !== false) chartCards.push('<div class="chart-card"><h3>Revenue Over Time (ARR)</h3><canvas id="revenueChart"></canvas></div>');
       if (mc.revenueSources !== false) chartCards.push('<div class="chart-card"><h3>Revenue Sources (Latest)</h3><canvas id="sourcesChart"></canvas></div>');
       if (mc.openRateTrend !== false) chartCards.push('<div class="chart-card"><h3>Open Rate Trend</h3><canvas id="openRateChart"></canvas></div>');
+      if (mc.churnByReason !== false && latest.churnTimeseries && latest.churnTimeseries.length > 0) chartCards.push('<div class="chart-card"><h3>Monthly Churn</h3><canvas id="monthlyChurnChart"></canvas></div>');
+      if (mc.churnByReason !== false && latest.churnByReason) chartCards.push('<div class="chart-card"><h3>Churn Reasons</h3><canvas id="churnReasonsChart"></canvas></div>');
       if (mc.churnByReason !== false && latest.churnTimeseries && latest.churnTimeseries.length > 0) chartCards.push('<div class="chart-card" style="grid-column:1/-1"><h3>Paid Churn by Reason (Daily)</h3><canvas id="churnChart"></canvas></div>');
-      if (mc.churnByReason !== false && latest.churnByReason) chartCards.push('<div class="chart-card"><h3>Churn Reasons (90d)</h3><canvas id="churnReasonsChart"></canvas></div>');
       if (mc.netGrowthTrend !== false && snapshots.length > 1) chartCards.push('<div class="chart-card"><h3>Net Subscriber Growth</h3><canvas id="netGrowthChart"></canvas></div>');
       if (chartCards.length > 0) {
         app.insertAdjacentHTML('beforeend', `<div class="charts-grid">${chartCards.join('')}</div>`);
@@ -355,6 +377,34 @@
             }]
           },
           options: { ...chartDefaults, scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, min: 0, max: 100 } } }
+        });
+      }
+
+      // Monthly churn bar chart
+      if (mc.churnByReason !== false && latest.churnTimeseries && latest.churnTimeseries.length > 0 && document.getElementById('monthlyChurnChart')) {
+        const ts = latest.churnTimeseries;
+        const months = [...new Set(ts.map(r => r.period.substring(0, 7)))].sort();
+        const reasons = ['price', 'autorenew', 'content', 'low_volume', 'time', 'other'];
+        const datasets = reasons.map(reason => ({
+          label: REASON_LABELS[reason] || reason,
+          data: months.map(m2 => ts.filter(r => r.period.startsWith(m2) && r.reason === reason).reduce((s, r) => s + r.count, 0)),
+          backgroundColor: getReasonColor(reason),
+          borderWidth: 0
+        }));
+        new Chart(document.getElementById('monthlyChurnChart'), {
+          type: 'bar',
+          data: {
+            labels: months.map(m2 => { const [y, mo] = m2.split('-'); return new Date(y, mo - 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }); }),
+            datasets
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#666' } } },
+            scales: {
+              x: { stacked: true, ticks: { color: '#444' }, grid: { color: '#1a1a1a' } },
+              y: { stacked: true, ticks: { color: '#444', stepSize: 5 }, grid: { color: '#1a1a1a' } }
+            }
+          }
         });
       }
 

@@ -43,7 +43,7 @@
 
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(6, 1fr);
       gap: 16px;
       margin-bottom: 32px;
     }
@@ -272,6 +272,11 @@
           <div class="kpi-card">
             <div class="label">Avg Revenue/Post</div>
             <div class="value">$${filtered.length > 0 ? Math.round(totalRevenue / filtered.length).toLocaleString() : 0}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="label">Signup → Paid Rate</div>
+            <div class="value">${totalSignups > 0 ? ((totalSubscribes / totalSignups) * 100).toFixed(1) : 0}%</div>
+            <div class="sub">${totalSignups.toLocaleString()} signups → ${totalSubscribes.toLocaleString()} paid</div>
           </div>
         </div>
 

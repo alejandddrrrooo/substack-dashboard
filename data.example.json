@@ -21,6 +21,17 @@
         { "source": "Direct", "amount": 3000, "share": "60%" },
         { "source": "Substack", "amount": 2000, "share": "40%" }
       ],
+      "churnTimeseries": [
+        { "period": "2025-10-05T00:00:00.000Z", "reason": "price", "count": 1 },
+        { "period": "2025-10-12T00:00:00.000Z", "reason": "time", "count": 2 },
+        { "period": "2025-11-01T00:00:00.000Z", "reason": "content", "count": 1 }
+      ],
+      "totalChurn90d": 4,
+      "churnByReason": {
+        "price": 1,
+        "time": 2,
+        "content": 1
+      },
       "allPosts": [
         {
           "id": 1,

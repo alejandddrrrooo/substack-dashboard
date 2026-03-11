@@ -172,6 +172,16 @@
       return map[source] || '#666';
     }
 
+    function getReasonColor(reason) {
+      const map = (CFG.charts && CFG.charts.churnReasons) || {};
+      return map[reason] || '#9ca3af';
+    }
+
+    const REASON_LABELS = {
+      price: 'Price', autorenew: 'Autorenew', time: 'Time',
+      content: 'Content', low_volume: 'Low Volume', other: 'Other'
+    };
+
     function isMetricEnabled(section, key) {
       if (!CFG.metrics || !CFG.metrics[section]) return true;
       return CFG.metrics[section][key] !== false;
@@ -241,8 +251,28 @@
           ${prev ? `<span class="delta ${(latest.openRate - prev.openRate) >= 0 ? 'up' : 'down'}">${(latest.openRate - prev.openRate) >= 0 ? '+' : ''}${(latest.openRate - prev.openRate).toFixed(2)}pp</span>` : ''}
         </div>`);
       }
+      if (m.churn90d !== false && latest.totalChurn90d) {
+        const topReason = latest.churnByReason ? Object.entries(latest.churnByReason).sort((a,b) => b[1] - a[1])[0] : null;
+        const churnPct = latest.paidSubscribers > 0 ? ((latest.totalChurn90d / 3) / latest.paidSubscribers * 100).toFixed(1) : null;
+        kpis.push(`<div class="kpi-card">
+          <div class="label">Paid Churn (90d)</div>
+          <div class="value" style="color:#ef4444">${latest.totalChurn90d} <span style="font-size:16px;font-weight:400">${churnPct ? `(${churnPct}%/mo)` : ''}</span></div>
+          ${topReason ? `<span style="font-size:13px;color:#666">Top: ${REASON_LABELS[topReason[0]] || topReason[0]} (${topReason[1]})</span>` : ''}
+        </div>`);
+      }
+      if (m.netGrowth !== false && prev) {
+        const netTotal = (latest.totalSubscribers || 0) - (prev.totalSubscribers || 0);
+        const netPaid = (latest.paidSubscribers || 0) - (prev.paidSubscribers || 0);
+        const cls = netTotal >= 0 ? 'up' : 'down';
+        kpis.push(`<div class="kpi-card">
+          <div class="label">Net Growth (1d)</div>
+          <div class="value"><span class="delta ${cls}" style="font-size:28px;font-weight:700">${netTotal >= 0 ? '+' : ''}${netTotal.toLocaleString()}</span></div>
+          <span style="font-size:13px;color:#666">${netPaid >= 0 ? '+' : ''}${netPaid} paid</span>
+        </div>`);
+      }
       if (kpis.length > 0) {
-        app.insertAdjacentHTML('beforeend', `<div class="kpi-grid" style="grid-template-columns:repeat(${kpis.length},1fr)">${kpis.join('')}</div>`);
+        const cols = Math.min(kpis.length, 6);
+        app.insertAdjacentHTML('beforeend', `<div class="kpi-grid" style="grid-template-columns:repeat(${cols},1fr)">${kpis.join('')}</div>`);
       }
 
       // Charts — only show enabled ones
@@ -252,6 +282,9 @@
       if (mc.revenueOverTime !== false) chartCards.push('<div class="chart-card"><h3>Revenue Over Time (ARR)</h3><canvas id="revenueChart"></canvas></div>');
       if (mc.revenueSources !== false) chartCards.push('<div class="chart-card"><h3>Revenue Sources (Latest)</h3><canvas id="sourcesChart"></canvas></div>');
       if (mc.openRateTrend !== false) chartCards.push('<div class="chart-card"><h3>Open Rate Trend</h3><canvas id="openRateChart"></canvas></div>');
+      if (mc.churnByReason !== false && latest.churnTimeseries && latest.churnTimeseries.length > 0) chartCards.push('<div class="chart-card" style="grid-column:1/-1"><h3>Paid Churn by Reason (Daily)</h3><canvas id="churnChart"></canvas></div>');
+      if (mc.churnByReason !== false && latest.churnByReason) chartCards.push('<div class="chart-card"><h3>Churn Reasons (90d)</h3><canvas id="churnReasonsChart"></canvas></div>');
+      if (mc.netGrowthTrend !== false && snapshots.length > 1) chartCards.push('<div class="chart-card"><h3>Net Subscriber Growth</h3><canvas id="netGrowthChart"></canvas></div>');
       if (chartCards.length > 0) {
         app.insertAdjacentHTML('beforeend', `<div class="charts-grid">${chartCards.join('')}</div>`);
       }
@@ -322,6 +355,79 @@
             }]
           },
           options: { ...chartDefaults, scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, min: 0, max: 100 } } }
+        });
+      }
+
+      // Churn by Reason stacked bar chart
+      if (mc.churnByReason !== false && latest.churnTimeseries && latest.churnTimeseries.length > 0 && document.getElementById('churnChart')) {
+        const ts = latest.churnTimeseries;
+        const allDates = [...new Set(ts.map(r => r.period.split('T')[0]))].sort();
+        const reasons = ['price', 'autorenew', 'content', 'low_volume', 'time', 'other'];
+        const datasets = reasons.map(reason => ({
+          label: REASON_LABELS[reason] || reason,
+          data: allDates.map(d => {
+            const match = ts.filter(r => r.period.startsWith(d) && r.reason === reason);
+            return match.reduce((s, r) => s + r.count, 0);
+          }),
+          backgroundColor: getReasonColor(reason),
+          borderWidth: 0
+        }));
+        new Chart(document.getElementById('churnChart'), {
+          type: 'bar',
+          data: {
+            labels: allDates.map(d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+            datasets
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#666' } } },
+            scales: {
+              x: { stacked: true, ticks: { color: '#444', maxRotation: 45 }, grid: { color: '#1a1a1a' } },
+              y: { stacked: true, ticks: { color: '#444', stepSize: 1 }, grid: { color: '#1a1a1a' } }
+            }
+          }
+        });
+      }
+
+      // Churn reasons doughnut
+      if (mc.churnByReason !== false && latest.churnByReason && document.getElementById('churnReasonsChart')) {
+        const entries = Object.entries(latest.churnByReason).sort((a, b) => b[1] - a[1]);
+        new Chart(document.getElementById('churnReasonsChart'), {
+          type: 'doughnut',
+          data: {
+            labels: entries.map(e => REASON_LABELS[e[0]] || e[0]),
+            datasets: [{ data: entries.map(e => e[1]), backgroundColor: entries.map(e => getReasonColor(e[0])), borderWidth: 0 }]
+          },
+          options: { responsive: true, plugins: { legend: { position: 'right', labels: { color: '#999', padding: 12 } } } }
+        });
+      }
+
+      // Net growth trend (needs 2+ snapshots)
+      if (mc.netGrowthTrend !== false && snapshots.length > 1 && document.getElementById('netGrowthChart')) {
+        const growthLabels = snapshots.slice(1).map(s => s.date);
+        const netPaidData = snapshots.slice(1).map((s, i) => (s.paidSubscribers || 0) - (snapshots[i].paidSubscribers || 0));
+        const netFreeData = snapshots.slice(1).map((s, i) => {
+          const totalNet = (s.totalSubscribers || 0) - (snapshots[i].totalSubscribers || 0);
+          const paidNet = (s.paidSubscribers || 0) - (snapshots[i].paidSubscribers || 0);
+          return totalNet - paidNet;
+        });
+        new Chart(document.getElementById('netGrowthChart'), {
+          type: 'bar',
+          data: {
+            labels: growthLabels,
+            datasets: [
+              { label: 'Net Paid', data: netPaidData, backgroundColor: getColor('paid') + '80', borderColor: getColor('paid'), borderWidth: 1 },
+              { label: 'Net Free', data: netFreeData, backgroundColor: getColor('subscribers') + '80', borderColor: getColor('subscribers'), borderWidth: 1 }
+            ]
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#666' } } },
+            scales: {
+              x: { stacked: true, ticks: { color: '#444' }, grid: { color: '#1a1a1a' } },
+              y: { stacked: true, ticks: { color: '#444' }, grid: { color: '#1a1a1a' } }
+            }
+          }
         });
       }
 

@@ -25,7 +25,17 @@
       "pink": "#ec4899",
       "teal": "#14b8a6",
       "yellow": "#eab308",
-      "red": "#ef4444"
+      "red": "#ef4444",
+      "churn": "#ef4444",
+      "netGrowth": "#22c55e"
+    },
+    "churnReasons": {
+      "price": "#3b82f6",
+      "autorenew": "#f97316",
+      "content": "#eab308",
+      "low_volume": "#22c55e",
+      "time": "#a855f7",
+      "other": "#9ca3af"
     },
     "revenueSources": {
       "Instagram": "#e1306c",
@@ -42,13 +52,17 @@
       "totalSubscribers": true,
       "paidSubscribers": true,
       "annualizedRevenue": true,
-      "openRate": true
+      "openRate": true,
+      "churn90d": true,
+      "netGrowth": true
     },
     "charts": {
       "subscribersOverTime": true,
       "revenueOverTime": true,
       "revenueSources": true,
-      "openRateTrend": true
+      "openRateTrend": true,
+      "churnByReason": true,
+      "netGrowthTrend": true
     },
     "posts": {
       "revenueByPost": true,

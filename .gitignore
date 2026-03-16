@@ -1,6 +1,5 @@
 node_modules/
 .vercel/
 .claude/
-data.json
 public/data.json
 public/config.json

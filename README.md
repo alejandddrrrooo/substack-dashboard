@@ -140,3 +140,4 @@ See `data.example.json` for the full snapshot schema. Key fields:
 ## License
 
 MIT
+<!-- deployed -->
